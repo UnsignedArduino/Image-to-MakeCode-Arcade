@@ -1,8 +1,10 @@
 from argparse import ArgumentParser
+from textwrap import indent
 from math import sqrt
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
-from PIL import Image
+from PIL import Image, ImageSequence
 
 parser = ArgumentParser(description="Convert an image to a MakeCode Arcade "
                                     "image!")
@@ -37,7 +39,10 @@ parser.add_argument("--palette", type=str, required=False,
                          "#5c406c,#e5cdc4,#91463d,#000000\" (that is the "
                          "default palette for this tool and MakeCode Arcade)"
                     )
-# TODO: Can support GIFs and output a TypeScript list of images
+parser.add_argument("-g", "--gif", action="store_true", required=False,
+                    help="Whether to try to read the image as a GIF. If "
+                         "specified, the output will be a TypeScript list of "
+                         "images.")
 args = parser.parse_args()
 
 can_log = args.output is not None or args.preview
@@ -45,10 +50,15 @@ can_log = args.output is not None or args.preview
 if can_log:
     print(f"Arguments received: {args}")
 
+is_gif = args.gif
+
 input_path = args.input.expanduser().resolve()
 if can_log:
-    print(f"Opening image {input_path}")
+    print(f"Opening {'GIF' if is_gif else 'image'} {input_path}")
 input_image = Image.open(input_path)
+
+if is_gif and can_log:
+    print(f"First frame is {input_image.info['duration']} ms long")
 
 width, height = input_image.size
 if can_log:
@@ -75,8 +85,21 @@ if can_log:
     print(f"New size: {new_width}x{new_height}")
 
 # New resized image
-output_image = input_image.resize((new_width, new_height), Image.ANTIALIAS)
-# output_image.show()
+if is_gif:
+    resized_gif_frames = []
+    frame_count = 0
+    for frame in ImageSequence.Iterator(input_image):
+        frame_count += 1
+        # print(f"On frame {frame_count} {frame.size}")
+        resized_gif_frames.append(frame.resize((new_width, new_height),
+                                               Image.ANTIALIAS))
+    if can_log:
+        print(f"Resized {frame_count} frames")
+else:
+    output_image = input_image.resize((new_width, new_height), Image.ANTIALIAS)
+    if can_log:
+        print(f"Resized image")
+    # output_image.show()
 
 
 def change_palette(image: Image.Image,
@@ -114,20 +137,32 @@ def change_palette(image: Image.Image,
         :param p: The palette as a list of tuples of 3 integers.
         :return: A tuple of 3 integers being a color in the palette.
         """
-        return sorted(p, key=lambda color: distance(color, c))[0]
+        return sorted(p, key=lambda col: distance(col, c))[0]
 
     new_image = image.copy()
-    w, h = image.size
+    w, h = new_image.size
+
+    if is_gif:
+        index_to_color = {v: k for k, v in input_image.palette.colors.items()}
 
     for y in range(h):
         for x in range(w):
-            new_color = get_closest_color(new_image.getpixel((x, y)), palette)
-            new_image.putpixel((x, y), new_color)
+            pixel = new_image.getpixel((x, y))
+            if is_gif:
+                if isinstance(pixel, int):
+                    pixel_color = index_to_color[pixel]
+                elif len(pixel) > 3:
+                    pixel_color = pixel[:-1]  # Skip alpha
+                new_color = get_closest_color(pixel_color, palette)
+                new_image.putpixel((x, y), new_color)
+            else:
+                new_color = get_closest_color(pixel, palette)
+                new_image.putpixel((x, y), new_color)
 
     return new_image
 
 
-# arcade_palette = (
+# palette = (
 #     "#000000",
 #     "#ffffff",
 #     "#ff2121",
@@ -145,24 +180,49 @@ def change_palette(image: Image.Image,
 #     "#91463d",
 #     "#000000",
 # )
-arcade_palette = args.palette.split(",")
+palette = args.palette.split(",")
 # Remove # from colors
-arcade_palette = [s.replace("#", "") for s in arcade_palette]
+palette = [s.replace("#", "") for s in palette]
 # Split the hex string into the RGB components
-arcade_palette = [(n[:2], n[2:4], n[4:]) for n in arcade_palette]
+palette = [(n[:2], n[2:4], n[4:]) for n in palette]
 # Convert them into actual numbers
-arcade_palette = [(int(n[0], base=16),
-                   int(n[1], base=16),
-                   int(n[2], base=16)) for n in arcade_palette]
+palette = [(int(n[0], base=16),
+            int(n[1], base=16),
+            int(n[2], base=16)) for n in palette]
 if can_log:
-    print(f"Using palette of {len(arcade_palette)} colors")
+    print(f"Using palette of {len(palette)} colors")
 
-output_image = change_palette(output_image, arcade_palette)
-if args.preview:
+if is_gif:
+    output_images = []
+    frame_count = 0
+    for frame in resized_gif_frames:
+        frame_count += 1
+        # print(f"On frame {frame_count} {frame.size}")
+        output_images.append(change_palette(frame, palette))
     if can_log:
-        print(f"Previewing!")
-    output_image.show()
-    exit(0)
+        print(f"Changed palette of {frame_count} frames")
+    if args.preview:
+        if can_log:
+            print(f"Previewing!")
+        preview_image = output_images[0].copy()
+        with NamedTemporaryFile(suffix=".gif", delete=False) as gif_bytes:
+            preview_image.save(gif_bytes, save_all=True,
+                               append_images=output_images[1:],
+                               format="GIF")
+            gif_path = Path(gif_bytes.name)
+            print(f"Saved to {gif_path}")
+        preview_image = Image.open(gif_path)
+        preview_image.show()
+        exit()
+else:
+    output_image = change_palette(output_image, palette)
+    if can_log:
+        print(f"Changed palette")
+    if args.preview:
+        if can_log:
+            print(f"Previewing!")
+        output_image.show()
+        exit(0)
 
 
 def image_to_makecode_arcade(image: Image.Image,
@@ -179,10 +239,21 @@ def image_to_makecode_arcade(image: Image.Image,
 
     mkcd_str = "img`\n"
 
+    if is_gif and image.palette is not None:
+        index_to_color = {v: k for k, v in image.palette.colors.items()}
+
     for y in range(h):
         for x in range(w):
-            color = image.getpixel((x, y))
-            mkcd_str += palette[color]
+            if is_gif:
+                color = image.getpixel((x, y))
+                if isinstance(color, int):
+                    color = index_to_color[color]
+                elif isinstance(color, tuple) and len(color) > 3:
+                    color = color[:-1]
+                mkcd_str += palette[color]
+            else:
+                color = image.getpixel((x, y))
+                mkcd_str += palette[color]
         mkcd_str += "\n"
 
     mkcd_str += "`"
@@ -191,10 +262,20 @@ def image_to_makecode_arcade(image: Image.Image,
 
 # Convert palette to dictionary mapping from color tuples to string character
 arcade_palette_map = {}
-for index, color in enumerate(arcade_palette):
+for index, color in enumerate(palette):
     arcade_palette_map[color] = hex(index)[2:]
 
-text = image_to_makecode_arcade(output_image, arcade_palette_map)
+if is_gif:
+    text = "[\n"
+    for output in output_images:
+        original_lines = image_to_makecode_arcade(output, arcade_palette_map).splitlines(keepends=True)
+        text += indent(original_lines[0], " " * 4)
+        text += indent("".join(original_lines[1:-1]), " " * 8)
+        text += indent(original_lines[-1], " " * 4)
+        text += ",\n"
+    text += "]"
+else:
+    text = image_to_makecode_arcade(output_image, arcade_palette_map)
 
 if args.output is not None:
     output_path = args.output.expanduser().resolve()
