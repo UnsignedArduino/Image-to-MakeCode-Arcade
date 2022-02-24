@@ -1,8 +1,8 @@
 from argparse import ArgumentParser
-from textwrap import indent
 from math import sqrt
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from textwrap import indent
 
 from PIL import Image, ImageSequence
 
