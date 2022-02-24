@@ -10,9 +10,10 @@ parser.add_argument("-i", "--input", metavar="PATH", type=Path, required=True,
                     help="The input image.")
 parser.add_argument("-o", "--output", metavar="PATH", type=Path,
                     required=True,  # TODO: Do not require - if not passed in
-                    #  output the output image to stdout
+                                    #  output the output image to stdout
                     help="The output text file which contains a MakeCode "
                          "Arcade image.")
+# TODO: Can support GIFs and output a TypeScript list of images
 # TODO: Can resize to specified width/height with -s (width)x(height) or
 #  --size (width)x(height)
 # TODO: Can show preview image and not write anything when passed in -p or
