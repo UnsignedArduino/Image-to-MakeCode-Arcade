@@ -24,9 +24,20 @@ parser.add_argument("--height", metavar="H", type=int, required=False,
                     help="The height of the resulting MakeCode Arcade image."
                          "If width is omitted, aspect ratio will be "
                          "respected.")
-# TODO: Progress bar for conversion
+parser.add_argument("--palette", type=str, required=False,
+                    default="#000000,#ffffff,#ff2121,#ff93c4,"
+                            "#ff8135,#fff609,#249ca3,#78dc52,"
+                            "#003fad,#87f2ff,#8e2ec4,#a4839f,"
+                            "#5c406c,#e5cdc4,#91463d,#000000",
+                    help="The palette to use. Must be a string of comma "
+                         "separated 6-digit hex codes. For example: \""
+                         "#000000,#ffffff,#ff2121,#ff93c4,"
+                         "#ff8135,#fff609,#249ca3,#78dc52,"
+                         "#003fad,#87f2ff,#8e2ec4,#a4839f,"
+                         "#5c406c,#e5cdc4,#91463d,#000000\" (that is the "
+                         "default palette for this tool and MakeCode Arcade)"
+                    )
 # TODO: Can support GIFs and output a TypeScript list of images
-# TODO: Can specify custom palette of 16 colors
 args = parser.parse_args()
 
 can_log = args.output is not None or args.preview
@@ -116,24 +127,25 @@ def change_palette(image: Image.Image,
     return new_image
 
 
-arcade_palette = (
-    "#000000",
-    "#ffffff",
-    "#ff2121",
-    "#ff93c4",
-    "#ff8135",
-    "#fff609",
-    "#249ca3",
-    "#78dc52",
-    "#003fad",
-    "#87f2ff",
-    "#8e2ec4",
-    "#a4839f",
-    "#5c406c",
-    "#e5cdc4",
-    "#91463d",
-    "#000000",
-)
+# arcade_palette = (
+#     "#000000",
+#     "#ffffff",
+#     "#ff2121",
+#     "#ff93c4",
+#     "#ff8135",
+#     "#fff609",
+#     "#249ca3",
+#     "#78dc52",
+#     "#003fad",
+#     "#87f2ff",
+#     "#8e2ec4",
+#     "#a4839f",
+#     "#5c406c",
+#     "#e5cdc4",
+#     "#91463d",
+#     "#000000",
+# )
+arcade_palette = args.palette.split(",")
 # Remove # from colors
 arcade_palette = [s.replace("#", "") for s in arcade_palette]
 # Split the hex string into the RGB components
