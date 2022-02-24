@@ -2,7 +2,6 @@ from argparse import ArgumentParser
 from math import sqrt
 from pathlib import Path
 from sys import stdout
-from tempfile import NamedTemporaryFile
 from textwrap import indent
 
 from PIL import Image, ImageSequence
