@@ -12,14 +12,17 @@ parser.add_argument("-o", "--output", metavar="PATH", type=Path,
                     required=False,
                     help="The output text file which contains a MakeCode "
                          "Arcade image.")
+parser.add_argument("-p", "--preview", action="store_true",
+                    help="Whether to preview the outputted image in the "
+                         "default image viewer instead of writing to a file "
+                         "or standard output. ")
 # TODO: Can support GIFs and output a TypeScript list of images
 # TODO: Can resize to specified width/height with -s (width)x(height) or
 #  --size (width)x(height)
-# TODO: Can show preview image and not write anything when passed in -p or
-#  --preview
+# TODO: Can specify custom palette of 16 colors
 args = parser.parse_args()
 
-can_log = args.output is not None
+can_log = args.output is not None or args.preview
 
 if can_log:
     print(f"Arguments received: {args}")
@@ -129,7 +132,11 @@ if can_log:
     print(f"Using palette of {len(arcade_palette)} colors")
 
 output_image = change_palette(output_image, arcade_palette)
-# output_image.show()
+if args.preview:
+    if can_log:
+        print(f"Previewing!")
+    output_image.show()
+    exit(0)
 
 
 def image_to_makecode_arcade(image: Image.Image,
