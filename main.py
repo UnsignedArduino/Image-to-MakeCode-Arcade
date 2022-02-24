@@ -194,26 +194,17 @@ if can_log:
     print(f"Using palette of {len(palette)} colors")
 
 if is_gif:
-    output_images = []
-    frame_count = 0
-    for frame in tqdm(resized_gif_frames, desc="Quantifying palette",
-                      file=stdout):
-        frame_count += 1
-        # print(f"On frame {frame_count} {frame.size}")
-        output_images.append(change_palette(frame, palette))
-    if can_log:
-        print(f"Changed palette of {frame_count} frames")
     if args.preview:
         if can_log:
-            print(f"Previewing!")
-        preview_image = output_images[0].copy()
-        with NamedTemporaryFile(suffix=".gif", delete=False) as gif_bytes:
-            preview_image.save(gif_bytes, save_all=True,
-                               append_images=output_images[1:],
-                               format="GIF")
-            gif_path = Path(gif_bytes.name)
-            print(f"Saved to {gif_path}")
-        preview_image = Image.open(gif_path)
+            print(f"Previewing first frame!")
+        preview_image = resized_gif_frames[0]
+        # with NamedTemporaryFile(suffix=".gif", delete=False) as gif_bytes:
+        #     preview_image.save(gif_bytes, save_all=True,
+        #                        append_images=output_images[1:],
+        #                        format="GIF")
+        #     gif_path = Path(gif_bytes.name)
+        #     print(f"Saved to {gif_path}")
+        # preview_image = Image.open(gif_path)
         preview_image.show()
         exit()
 else:
@@ -268,21 +259,41 @@ for index, color in enumerate(palette):
     arcade_palette_map[color] = hex(index)[2:]
 
 if is_gif:
-    text = "[\n"
-    for output in output_images:
-        original_lines = image_to_makecode_arcade(output, arcade_palette_map).splitlines(keepends=True)
-        text += indent(original_lines[0], " " * 4)
-        text += indent("".join(original_lines[1:-1]), " " * 8)
-        text += indent(original_lines[-1], " " * 4)
-        text += ",\n"
-    text += "]"
+    if args.output is not None:
+        output_path = args.output.expanduser().resolve()
+        with output_path.open(mode="wt") as file:
+            file.write("[\n")
+            frame_count = 0
+            for frame in tqdm(resized_gif_frames, desc="Converting frames",
+                              file=stdout):
+                frame_count += 1
+                output = change_palette(frame, palette)
+                original_lines = image_to_makecode_arcade(
+                    output, arcade_palette_map).splitlines(keepends=True)
+                text = indent(original_lines[0], " " * 4)
+                text += indent("".join(original_lines[1:-1]), " " * 8)
+                text += indent(original_lines[-1], " " * 4)
+                text += ",\n"
+                file.write(text)
+            file.write("]")
+            print(f"Wrote {frame_count} frames")
+    else:
+        print("[\n")
+        for frame in resized_gif_frames:
+            original_lines = image_to_makecode_arcade(
+                frame, arcade_palette_map).splitlines(keepends=True)
+            text = indent(original_lines[0], " " * 4)
+            text += indent("".join(original_lines[1:-1]), " " * 8)
+            text += indent(original_lines[-1], " " * 4)
+            text += ",\n"
+            print(text)
+        print("]")
 else:
     text = image_to_makecode_arcade(output_image, arcade_palette_map)
-
-if args.output is not None:
-    output_path = args.output.expanduser().resolve()
-    if can_log:
-        print(f"Writing to {output_path}")
-    output_path.write_text(text)
-else:
-    print(text)
+    if args.output is not None:
+        output_path = args.output.expanduser().resolve()
+        if can_log:
+            print(f"Writing to {output_path}")
+        output_path.write_text(text)
+    else:
+        print(text)
