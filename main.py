@@ -1,10 +1,12 @@
 from argparse import ArgumentParser
 from math import sqrt
 from pathlib import Path
+from sys import stdout
 from tempfile import NamedTemporaryFile
 from textwrap import indent
 
 from PIL import Image, ImageSequence
+from tqdm import tqdm
 
 parser = ArgumentParser(description="Convert an image to a MakeCode Arcade "
                                     "image!")
@@ -90,7 +92,6 @@ if is_gif:
     frame_count = 0
     for frame in ImageSequence.Iterator(input_image):
         frame_count += 1
-        # print(f"On frame {frame_count} {frame.size}")
         resized_gif_frames.append(frame.resize((new_width, new_height),
                                                Image.ANTIALIAS))
     if can_log:
@@ -195,7 +196,8 @@ if can_log:
 if is_gif:
     output_images = []
     frame_count = 0
-    for frame in resized_gif_frames:
+    for frame in tqdm(resized_gif_frames, desc="Quantifying palette",
+                      file=stdout):
         frame_count += 1
         # print(f"On frame {frame_count} {frame.size}")
         output_images.append(change_palette(frame, palette))
