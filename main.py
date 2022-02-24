@@ -9,8 +9,7 @@ parser = ArgumentParser(description="Convert an image to a MakeCode Arcade "
 parser.add_argument("-i", "--input", metavar="PATH", type=Path, required=True,
                     help="The input image.")
 parser.add_argument("-o", "--output", metavar="PATH", type=Path,
-                    required=True,  # TODO: Do not require - if not passed in
-                                    #  output the output image to stdout
+                    required=False,
                     help="The output text file which contains a MakeCode "
                          "Arcade image.")
 # TODO: Can support GIFs and output a TypeScript list of images
@@ -19,17 +18,24 @@ parser.add_argument("-o", "--output", metavar="PATH", type=Path,
 # TODO: Can show preview image and not write anything when passed in -p or
 #  --preview
 args = parser.parse_args()
-print(f"Arguments received: {args}")
+
+can_log = args.output is not None
+
+if can_log:
+    print(f"Arguments received: {args}")
 
 input_path = args.input.expanduser().resolve()
-print(f"Opening image {input_path}")
+if can_log:
+    print(f"Opening image {input_path}")
 input_image = Image.open(input_path)
 
 width, height = input_image.size
-print(f"Size: {width}x{height}")
+if can_log:
+    print(f"Size: {width}x{height}")
 
 new_width, new_height = 160, None
-print(f"Target size: {new_width}x{new_height}")
+if can_log:
+    print(f"Target size: {new_width}x{new_height}")
 
 # Get new width/height in respect to aspect ratio
 if new_height is None:
@@ -37,7 +43,8 @@ if new_height is None:
 elif new_width is None:
     new_width = round(new_height * width / height)
 
-print(f"New size: {new_width}x{new_height}")
+if can_log:
+    print(f"New size: {new_width}x{new_height}")
 
 # New resized image
 output_image = input_image.resize((new_width, new_height), Image.ANTIALIAS)
@@ -118,7 +125,8 @@ arcade_palette = [(n[:2], n[2:4], n[4:]) for n in arcade_palette]
 arcade_palette = [(int(n[0], base=16),
                    int(n[1], base=16),
                    int(n[2], base=16)) for n in arcade_palette]
-print(f"Using palette of {len(arcade_palette)} colors")
+if can_log:
+    print(f"Using palette of {len(arcade_palette)} colors")
 
 output_image = change_palette(output_image, arcade_palette)
 # output_image.show()
@@ -148,13 +156,17 @@ def image_to_makecode_arcade(image: Image.Image,
     return mkcd_str
 
 
-output_path = args.output.expanduser().resolve()
-print(f"Writing to {output_path}")
-
 # Convert palette to dictionary mapping from color tuples to string character
 arcade_palette_map = {}
 for index, color in enumerate(arcade_palette):
     arcade_palette_map[color] = hex(index)[2:]
 
-output_path.write_text(image_to_makecode_arcade(output_image,
-                                                arcade_palette_map))
+text = image_to_makecode_arcade(output_image, arcade_palette_map)
+
+if args.output is not None:
+    output_path = args.output.expanduser().resolve()
+    if can_log:
+        print(f"Writing to {output_path}")
+    output_path.write_text(text)
+else:
+    print(text)
