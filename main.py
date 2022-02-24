@@ -16,9 +16,16 @@ parser.add_argument("-p", "--preview", action="store_true",
                     help="Whether to preview the outputted image in the "
                          "default image viewer instead of writing to a file "
                          "or standard output. ")
+parser.add_argument("--width", metavar="W", type=int, required=False,
+                    help="The width of the resulting MakeCode Arcade image."
+                         "If height is omitted, aspect ratio will be "
+                         "respected.")
+parser.add_argument("--height", metavar="H", type=int, required=False,
+                    help="The height of the resulting MakeCode Arcade image."
+                         "If width is omitted, aspect ratio will be "
+                         "respected.")
+# TODO: Progress bar for conversion
 # TODO: Can support GIFs and output a TypeScript list of images
-# TODO: Can resize to specified width/height with -s (width)x(height) or
-#  --size (width)x(height)
 # TODO: Can specify custom palette of 16 colors
 args = parser.parse_args()
 
@@ -36,9 +43,16 @@ width, height = input_image.size
 if can_log:
     print(f"Size: {width}x{height}")
 
-new_width, new_height = 160, None
+new_width, new_height = args.width, args.height
+
+if new_width is None and new_height is None:
+    print("Width and height were not specified, defaulting to width of 160 "
+          "pixels and auto-calculated height!")
+    new_width = 160
+
 if can_log:
-    print(f"Target size: {new_width}x{new_height}")
+    print(f"Target size: {new_width if new_width is not None else '(auto)'}x"
+          f"{new_height if new_height is not None else '(auto)'}")
 
 # Get new width/height in respect to aspect ratio
 if new_height is None:
