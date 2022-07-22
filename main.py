@@ -153,6 +153,8 @@ def change_palette(image: Image.Image,
                     pixel_color = index_to_color[pixel]
                 elif len(pixel) > 3:
                     pixel_color = pixel[:-1]  # Skip alpha
+                else:
+                    pixel_color = pixel
                 new_color = get_closest_color(pixel_color, palette)
                 new_image.putpixel((x, y), new_color)
             else:
@@ -279,8 +281,9 @@ if is_gif:
     else:
         print("[\n")
         for frame in resized_gif_frames:
+            output = change_palette(frame, palette)
             original_lines = image_to_makecode_arcade(
-                frame, arcade_palette_map).splitlines(keepends=True)
+                output, arcade_palette_map).splitlines(keepends=True)
             text = indent(original_lines[0], " " * 4)
             text += indent("".join(original_lines[1:-1]), " " * 8)
             text += indent(original_lines[-1], " " * 4)
