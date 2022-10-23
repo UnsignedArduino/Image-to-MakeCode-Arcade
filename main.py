@@ -139,7 +139,7 @@ def change_palette(image: Image.Image,
         """
         return sorted(p, key=lambda col: distance(col, c))[0]
 
-    new_image = image.copy()
+    new_image = image.copy().convert("RGB")
     w, h = new_image.size
 
     if is_gif:
