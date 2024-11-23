@@ -10,8 +10,15 @@ Web version will be available soon in a different repo.
 2. Clone this repo.
 3. Install all the requirements in [`requirements.txt`](requirements.txt)
 
-> You may need to edit commands listed in this repo to use `py` or `python3` 
+> You may need to edit commands listed in this repo to use `py` or `python3`
 > if `python` doesn't work.
+
+> Don't want to/can't install `numpy` or `scipy`? Go to
+> [`scr/converter.py`](src/converter.py) and change the import statements to
+> use Python-only palette processing!
+> (change it to import [`utils.palette`](src/utils/palette.py) instead of
+> [`utils.fast_palette`](src/utils/fast_palette.py)) It will be slower but
+> won't matter unless you are converting huge GIFs
 
 ## Usage
 
@@ -20,16 +27,16 @@ Run [`src/main.py`](src/main.py) at the root of the repository in the terminal.
 
 ### Example commands
 
-To convert the JPEG file `image.jpg` and print the Arcade image to standard 
+To convert the JPEG file `image.jpg` and print the Arcade image to standard
 output with the default palette and no resizing.
 
 ```commandline
 python src/main.py -i "image.jpg"
 ```
 
-To preview the JPEG file at the absolute path 
-`E:\Arcade Image to Image\testing\image.jpg` and write the output to 
-`image.ts` in the current directory with a width of 160 and a height of 120, 
+To preview the JPEG file at the absolute path
+`E:\Arcade Image to Image\testing\image.jpg` and write the output to
+`image.ts` in the current directory with a width of 160 and a height of 120,
 and with debug messages on.
 
 ```commandline

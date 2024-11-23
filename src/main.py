@@ -1,14 +1,10 @@
 import logging
 from argparse import ArgumentParser
-from math import sqrt
 from pathlib import Path
-from sys import stdout
-from textwrap import indent
 
-from PIL import Image, ImageSequence
-from PIL.Image import Resampling
-from tqdm import tqdm
+from PIL import Image
 
+from converter import OutputOptions, convert
 from utils.logger import create_logger, set_all_stdout_logger_levels
 
 parser = ArgumentParser(description="Convert an image to a MakeCode Arcade "
@@ -57,241 +53,20 @@ logger = create_logger(name=__name__, level=logging.INFO)
 set_all_stdout_logger_levels(args.debug)
 logger.debug(f"Received arguments: {args}")
 
-is_gif = args.gif
-
 input_path = args.input.expanduser().resolve()
-logger.info(f"Opening {'GIF' if is_gif else 'image'} {input_path}")
+logger.info(f"Opening {'GIF' if args.gif else 'image'} {input_path}")
 input_image = Image.open(input_path)
 
-if is_gif:
-    logger.info(f"First frame is {input_image.info['duration']} ms long")
-
-width, height = input_image.size
-logger.info(f"Size: {width}x{height}")
-
-new_width, new_height = args.width, args.height
-
-if new_width is None and new_height is None:
-    logger.info("Width and height were not specified, defaulting to width of 160 "
-                "pixels and auto-calculated height!")
-    new_width = 160
-
-logger.info(f"Target size: {new_width if new_width is not None else '(auto)'}x"
-      f"{new_height if new_height is not None else '(auto)'}")
-
-# Get new width/height in respect to aspect ratio
-if new_height is None:
-    new_height = round(new_width * height / width)
-elif new_width is None:
-    new_width = round(new_height * width / height)
-
-logger.info(f"New size: {new_width}x{new_height}")
-
-# New resized image
-if is_gif:
-    resized_gif_frames = []
-    frame_count = 0
-    for frame in tqdm(ImageSequence.Iterator(input_image), desc="Resizing frames",
-                      file=stdout):
-        frame_count += 1
-        resized_gif_frames.append(frame.resize((new_width, new_height),
-                                               Resampling.LANCZOS))
-    logger.debug(f"Resized {frame_count} frames")
+logger.debug("Converting")
+output = convert(input_image,
+                 OutputOptions.PIL_IMAGE if args.preview else OutputOptions.MAKECODE_ARCADE_STRING,
+                 args.width, args.height, args.palette, args.gif)
+if args.preview:
+    output.show()
 else:
-    output_image = input_image.resize((new_width, new_height), Resampling.LANCZOS)
-    logger.debug(f"Resized image")
-    # output_image.show()
-
-
-def change_palette(image: Image.Image,
-                   palette: list[tuple[int, int, int], ...]
-                   ) -> Image.Image:
-    """
-    Get every pixel in the image and find the closest color to
-
-    :param image: A PIL image.
-    :param palette: A list of a tuple of 3 integers for every color allowed.
-    :return: A new PIL image.
-    """
-    # https://stackoverflow.com/a/34367441/10291933
-
-    def distance(c1: tuple[int, int, int],
-                 c2: tuple[int, int, int]) -> float:
-        """
-        Gets the "distance" between the colors.
-
-        :param c1: A tuple of 3 integers.
-        :param c2: A tuple of 3 integers.
-        :return: A float.
-        """
-        (r1, g1, b1) = c1
-        (r2, g2, b2) = c2
-        return sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2)
-
-    def get_closest_color(c: tuple[int, int, int],
-                          p: list[tuple[int, int, int], ...]
-                          ) -> tuple[int, int, int]:
-        """
-        Gets the closest color to your color.
-
-        :param c: The original color as a tuple of 3 integers.
-        :param p: The palette as a list of tuples of 3 integers.
-        :return: A tuple of 3 integers being a color in the palette.
-        """
-        return sorted(p, key=lambda col: distance(col, c))[0]
-
-    new_image = image.copy().convert("RGB")
-    w, h = new_image.size
-
-    if is_gif:
-        index_to_color = {v: k for k, v in input_image.palette.colors.items()}
-
-    for y in range(h):
-        for x in range(w):
-            pixel = new_image.getpixel((x, y))
-            if is_gif:
-                if isinstance(pixel, int):
-                    pixel_color = index_to_color[pixel]
-                elif len(pixel) > 3:
-                    pixel_color = pixel[:-1]  # Skip alpha
-                else:
-                    pixel_color = pixel
-                new_color = get_closest_color(pixel_color, palette)
-                new_image.putpixel((x, y), new_color)
-            else:
-                new_color = get_closest_color(pixel, palette)
-                new_image.putpixel((x, y), new_color)
-
-    return new_image
-
-
-# palette = (
-#     "#000000",
-#     "#ffffff",
-#     "#ff2121",
-#     "#ff93c4",
-#     "#ff8135",
-#     "#fff609",
-#     "#249ca3",
-#     "#78dc52",
-#     "#003fad",
-#     "#87f2ff",
-#     "#8e2ec4",
-#     "#a4839f",
-#     "#5c406c",
-#     "#e5cdc4",
-#     "#91463d",
-#     "#000000",
-# )
-palette = args.palette.split(",")
-# Remove # from colors
-palette = [s.replace("#", "") for s in palette]
-# Split the hex string into the RGB components
-palette = [(n[:2], n[2:4], n[4:]) for n in palette]
-# Convert them into actual numbers
-palette = [(int(n[0], base=16),
-            int(n[1], base=16),
-            int(n[2], base=16)) for n in palette]
-logger.debug(f"Using palette of {len(palette)} colors")
-
-if is_gif:
-    if args.preview:
-        logger.info(f"Previewing first frame before conversion!")
-        preview_image = resized_gif_frames[0]
-        # with NamedTemporaryFile(suffix=".gif", delete=False) as gif_bytes:
-        #     preview_image.save(gif_bytes, save_all=True,
-        #                        append_images=output_images[1:],
-        #                        format="GIF")
-        #     gif_path = Path(gif_bytes.name)
-        #     print(f"Saved to {gif_path}")
-        # preview_image = Image.open(gif_path)
-        preview_image.show()
-        exit()
-else:
-    output_image = change_palette(output_image, palette)
-    logger.debug(f"Changed palette")
-    if args.preview:
-        logger.info(f"Previewing!")
-        output_image.show()
-        exit(0)
-
-
-def image_to_makecode_arcade(image: Image.Image,
-                             palette: dict[tuple[int, int, int], str]) -> str:
-    """
-    Converts a PIL image to a MakeCode Arcade string.
-
-    :param image: The image to convert.
-    :param palette: A dictionary with keys being a color and values being the
-     new color value.
-    :return: A string which is a MakeCode Arcade image.
-    """
-    w, h = image.size
-
-    mkcd_str = "img`\n"
-
-    if is_gif and image.palette is not None:
-        index_to_color = {v: k for k, v in image.palette.colors.items()}
-
-    for y in range(h):
-        for x in range(w):
-            if is_gif:
-                color = image.getpixel((x, y))
-                if isinstance(color, int):
-                    color = index_to_color[color]
-                elif isinstance(color, tuple) and len(color) > 3:
-                    color = color[:-1]
-                mkcd_str += palette[color]
-            else:
-                color = image.getpixel((x, y))
-                mkcd_str += palette[color]
-        mkcd_str += "\n"
-
-    mkcd_str += "`"
-    return mkcd_str
-
-
-# Convert palette to dictionary mapping from color tuples to string character
-arcade_palette_map = {}
-for index, color in enumerate(palette):
-    arcade_palette_map[color] = hex(index)[2:]
-
-if is_gif:
-    if args.output is not None:
-        output_path = args.output.expanduser().resolve()
-        with output_path.open(mode="wt") as file:
-            file.write("[\n")
-            frame_count = 0
-            for frame in tqdm(resized_gif_frames, desc="Converting frames",
-                              file=stdout):
-                frame_count += 1
-                output = change_palette(frame, palette)
-                original_lines = image_to_makecode_arcade(
-                    output, arcade_palette_map).splitlines(keepends=True)
-                text = indent(original_lines[0], " " * 4)
-                text += indent("".join(original_lines[1:-1]), " " * 8)
-                text += indent(original_lines[-1], " " * 4)
-                text += ",\n"
-                file.write(text)
-            file.write("]")
-            logger.info(f"Wrote {frame_count} frames")
+    if args.output is None:
+        print(output)
     else:
-        print("[\n")
-        for frame in resized_gif_frames:
-            output = change_palette(frame, palette)
-            original_lines = image_to_makecode_arcade(
-                output, arcade_palette_map).splitlines(keepends=True)
-            text = indent(original_lines[0], " " * 4)
-            text += indent("".join(original_lines[1:-1]), " " * 8)
-            text += indent(original_lines[-1], " " * 4)
-            text += ",\n"
-            print(text)
-        print("]")
-else:
-    text = image_to_makecode_arcade(output_image, arcade_palette_map)
-    if args.output is not None:
         output_path = args.output.expanduser().resolve()
-        logger.debug(f"Writing to {output_path}")
-        output_path.write_text(text)
-    else:
-        print(text)
+        logger.info(f"Writing MakeCode Arcade image to {args.output}")
+        output_path.write_text(output)
