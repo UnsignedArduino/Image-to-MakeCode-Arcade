@@ -1,3 +1,4 @@
+import logging
 from argparse import ArgumentParser
 from math import sqrt
 from pathlib import Path
@@ -5,7 +6,10 @@ from sys import stdout
 from textwrap import indent
 
 from PIL import Image, ImageSequence
+from PIL.Image import Resampling
 from tqdm import tqdm
+
+from utils.logger import create_logger, set_all_stdout_logger_levels
 
 parser = ArgumentParser(description="Convert an image to a MakeCode Arcade "
                                     "image!")
@@ -44,37 +48,36 @@ parser.add_argument("-g", "--gif", action="store_true", required=False,
                     help="Whether to try to read the image as a GIF. If "
                          "specified, the output will be a TypeScript list of "
                          "images.")
+parser.add_argument("--debug", action="store_const",
+                    const=logging.DEBUG, default=logging.INFO,
+                    help="Include debug messages. Defaults to info and "
+                         "greater severity messages only.")
 args = parser.parse_args()
-
-can_log = args.output is not None or args.preview
-
-if can_log:
-    print(f"Arguments received: {args}")
+logger = create_logger(name=__name__, level=logging.INFO)
+set_all_stdout_logger_levels(args.debug)
+logger.debug(f"Received arguments: {args}")
 
 is_gif = args.gif
 
 input_path = args.input.expanduser().resolve()
-if can_log:
-    print(f"Opening {'GIF' if is_gif else 'image'} {input_path}")
+logger.info(f"Opening {'GIF' if is_gif else 'image'} {input_path}")
 input_image = Image.open(input_path)
 
-if is_gif and can_log:
-    print(f"First frame is {input_image.info['duration']} ms long")
+if is_gif:
+    logger.info(f"First frame is {input_image.info['duration']} ms long")
 
 width, height = input_image.size
-if can_log:
-    print(f"Size: {width}x{height}")
+logger.info(f"Size: {width}x{height}")
 
 new_width, new_height = args.width, args.height
 
 if new_width is None and new_height is None:
-    print("Width and height were not specified, defaulting to width of 160 "
-          "pixels and auto-calculated height!")
+    logger.info("Width and height were not specified, defaulting to width of 160 "
+                "pixels and auto-calculated height!")
     new_width = 160
 
-if can_log:
-    print(f"Target size: {new_width if new_width is not None else '(auto)'}x"
-          f"{new_height if new_height is not None else '(auto)'}")
+logger.info(f"Target size: {new_width if new_width is not None else '(auto)'}x"
+      f"{new_height if new_height is not None else '(auto)'}")
 
 # Get new width/height in respect to aspect ratio
 if new_height is None:
@@ -82,23 +85,21 @@ if new_height is None:
 elif new_width is None:
     new_width = round(new_height * width / height)
 
-if can_log:
-    print(f"New size: {new_width}x{new_height}")
+logger.info(f"New size: {new_width}x{new_height}")
 
 # New resized image
 if is_gif:
     resized_gif_frames = []
     frame_count = 0
-    for frame in ImageSequence.Iterator(input_image):
+    for frame in tqdm(ImageSequence.Iterator(input_image), desc="Resizing frames",
+                      file=stdout):
         frame_count += 1
         resized_gif_frames.append(frame.resize((new_width, new_height),
-                                               Image.ANTIALIAS))
-    if can_log:
-        print(f"Resized {frame_count} frames")
+                                               Resampling.LANCZOS))
+    logger.debug(f"Resized {frame_count} frames")
 else:
-    output_image = input_image.resize((new_width, new_height), Image.ANTIALIAS)
-    if can_log:
-        print(f"Resized image")
+    output_image = input_image.resize((new_width, new_height), Resampling.LANCZOS)
+    logger.debug(f"Resized image")
     # output_image.show()
 
 
@@ -191,13 +192,11 @@ palette = [(n[:2], n[2:4], n[4:]) for n in palette]
 palette = [(int(n[0], base=16),
             int(n[1], base=16),
             int(n[2], base=16)) for n in palette]
-if can_log:
-    print(f"Using palette of {len(palette)} colors")
+logger.debug(f"Using palette of {len(palette)} colors")
 
 if is_gif:
     if args.preview:
-        if can_log:
-            print(f"Previewing first frame!")
+        logger.info(f"Previewing first frame before conversion!")
         preview_image = resized_gif_frames[0]
         # with NamedTemporaryFile(suffix=".gif", delete=False) as gif_bytes:
         #     preview_image.save(gif_bytes, save_all=True,
@@ -210,11 +209,9 @@ if is_gif:
         exit()
 else:
     output_image = change_palette(output_image, palette)
-    if can_log:
-        print(f"Changed palette")
+    logger.debug(f"Changed palette")
     if args.preview:
-        if can_log:
-            print(f"Previewing!")
+        logger.info(f"Previewing!")
         output_image.show()
         exit(0)
 
@@ -277,7 +274,7 @@ if is_gif:
                 text += ",\n"
                 file.write(text)
             file.write("]")
-            print(f"Wrote {frame_count} frames")
+            logger.info(f"Wrote {frame_count} frames")
     else:
         print("[\n")
         for frame in resized_gif_frames:
@@ -294,8 +291,7 @@ else:
     text = image_to_makecode_arcade(output_image, arcade_palette_map)
     if args.output is not None:
         output_path = args.output.expanduser().resolve()
-        if can_log:
-            print(f"Writing to {output_path}")
+        logger.debug(f"Writing to {output_path}")
         output_path.write_text(text)
     else:
         print(text)
